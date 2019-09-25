@@ -148,33 +148,31 @@ toFull (Shortcut (p:ps) val) = do
   return $ Full (Seq.update (num $ wordToNib p) ref emptyRefs) BS.empty
 
 insertPath :: Node -> Path -> ByteString -> NodeDB Node
-insertPath node path bs = doInsert node >>= normalize
-  where
-    doInsert Empty = return $ Shortcut path $ Right bs
-    doInsert (Shortcut nPath nVal) = do
-      let (prefix, nSuffix, suffix) = splitPrefix nPath path
-      next <- case (nSuffix, suffix, nVal) of
-        ([], [], Right _) -> return $ Right bs
-        ([], _, Left ref) -> do
-          dbnode <- getNode ref
-          newNode <- insertPath dbnode suffix bs
-          return $ Left newNode
-        _ -> do
-          full <- toFull (Shortcut nSuffix nVal)
-          newNode <- insertPath full suffix bs
-          return $ Left newNode
-      case (prefix, next) of
-        ([], Left newNode) -> return newNode
-        (_, Left newNode) -> Shortcut prefix . Left <$> putNode newNode
-        (_, Right bts) -> return $ Shortcut prefix $ Right bts
-    doInsert (Full refs val) = case path of
-      [] -> return $ Full refs bs
-      (p:ps) -> do
-        let index = num $ wordToNib p
-            ref = refs `Seq.index` index
-        newRef <- insertRef ref ps bs
-        let newRefs = Seq.update index newRef refs
-        return $ Full newRefs val
+insertPath node path bs = (doInsert node path bs) >>= normalize
+
+doInsert :: Node -> Path -> ByteString -> NodeDB Node
+doInsert Empty path val = return $ Shortcut path (Right val)
+doInsert (Shortcut nPath nVal) path val = let (pre, nSuffix, suffix) = splitPrefix nPath path in
+                                          case (nSuffix, suffix, nVal) of
+                                            ([], [], Right _)  -> return $ Shortcut pre $ Right val
+                                            ([], _, Left ref) -> do
+                                              dbnode <- getNode ref
+                                              newNode <- insertPath dbnode suffix val
+                                              res <- case pre of
+                                                [] -> return newNode
+                                                p  -> Shortcut p . Left <$> putNode newNode
+                                              return res
+                                            _ -> do
+                                              full <- toFull (Shortcut nSuffix nVal)
+                                              newNode <- insertPath full suffix val
+                                              res <- case pre of
+                                                [] -> return newNode
+                                                p  -> Shortcut p . Left <$> putNode newNode
+                                              return res
+doInsert (Full refs nVal) [] val = return $ Full refs val
+doInsert (Full refs nVal) ((Nibble i):ps) val = let ref = refs `Seq.index` (num i) in do
+                                                  newRef <- insertRef ref ps val
+                                                  return $ Full (Seq.update (num i) newRef refs) nVal
 
 splitPrefix :: Path -> Path -> (Path, Path, Path)
 splitPrefix [] b = ([], [], b)
