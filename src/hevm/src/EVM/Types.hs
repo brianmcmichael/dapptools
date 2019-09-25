@@ -12,6 +12,7 @@ import Data.Aeson (FromJSONKey (..), FromJSONKeyFunction (..))
 
 import Data.Monoid ((<>))
 import Data.Bits
+import Data.Char
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 as BS16
 import Data.ByteString.Builder (byteStringHex, toLazyByteString)
@@ -194,3 +195,27 @@ word256Bytes x = BS.pack [byteAt x (31 - i) | i <- [0..31]]
 
 word160Bytes :: Addr -> ByteString
 word160Bytes x = BS.pack [byteAt (addressWord160 x) (19 - i) | i <- [0..19]]
+
+newtype Nibble = Nibble { wordToNib :: Word8 }
+  deriving (Eq)
+
+instance Show Nibble where
+  show = (:[]) . intToDigit . num . wordToNib
+
+--Get first and second Nibble from byte
+hi, lo :: Word8 -> Nibble
+hi b = Nibble $ b `shiftR` 4
+lo b = Nibble $ b .&. 0x0f
+
+toByte :: Nibble -> Nibble -> Word8
+toByte  (Nibble high) (Nibble low) = high `shift` 4 .|. low
+
+unpackNibbles :: ByteString -> [Nibble]
+unpackNibbles bs = BS.unpack bs >>= unpackByte
+  where unpackByte b = [hi b, lo b]
+
+--Well-defined for even length lists only (plz dependent types)
+packNibbles :: [Nibble] -> ByteString
+packNibbles [] = mempty
+packNibbles (n1:n2:ns) = BS.singleton (toByte n1 n2) <> packNibbles ns
+
