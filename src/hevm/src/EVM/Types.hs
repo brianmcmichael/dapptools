@@ -196,11 +196,12 @@ word256Bytes x = BS.pack [byteAt x (31 - i) | i <- [0..31]]
 word160Bytes :: Addr -> ByteString
 word160Bytes x = BS.pack [byteAt (addressWord160 x) (19 - i) | i <- [0..19]]
 
-newtype Nibble = Nibble { wordToNib :: Word8 }
-  deriving (Eq)
+newtype Nibble = Nibble Word8
+  deriving ( Num, Integral, Real, Ord, Enum, Eq
+    , Bits, FiniteBits, Bounded, Generic)
 
 instance Show Nibble where
-  show = (:[]) . intToDigit . num . wordToNib
+  show = (:[]) . intToDigit . num
 
 --Get first and second Nibble from byte
 hi, lo :: Word8 -> Nibble
